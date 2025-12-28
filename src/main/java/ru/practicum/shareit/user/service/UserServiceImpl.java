@@ -2,12 +2,15 @@ package ru.practicum.shareit.user.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import ru.practicum.shareit.errors.ConflictException;
 import ru.practicum.shareit.errors.NotFoundException;
-import ru.practicum.shareit.errors.ValidationException;
 import ru.practicum.shareit.user.dao.UserStorage;
+import ru.practicum.shareit.user.dto.UserDto;
+import ru.practicum.shareit.user.mapper.UserMapper;
 import ru.practicum.shareit.user.model.User;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -16,39 +19,46 @@ public class UserServiceImpl implements UserService {
     private long id = 0;
 
     @Override
-    public User create(User user) {
-        validate(user);
-        validateExistEmail(user.getEmail());
+    public UserDto create(UserDto userDto) {
+        validateExistEmail(userDto.getEmail());
+        User user = UserMapper.toUser(userDto);
 
         user.setId(generatedId());
-        return userStorage.create(user);
+
+        User savedUser = userStorage.create(user);
+        return UserMapper.toUserDto(savedUser);
     }
 
     @Override
-    public User get(Long id) {
-        return userStorage.get(id).orElseThrow(() ->
+    public UserDto get(Long id) {
+        User user = userStorage.get(id).orElseThrow(() ->
                 new NotFoundException(String.format("Пользователя с id: %s не существует", id)));
+        return UserMapper.toUserDto(user);
     }
 
     @Override
-    public List<User> getAll() {
-        return userStorage.getAll();
+    public List<UserDto> getAll() {
+        return userStorage.getAll().stream()
+                .map(UserMapper::toUserDto)
+                .collect(Collectors.toList());
     }
 
     @Override
-    public User update(User user) {
-        validateExistEmail(user.getEmail());
+    public UserDto update(UserDto userDto, Long userId) {
+        User existingUser = userStorage.get(userId).orElseThrow(() ->
+                new NotFoundException(String.format("Пользователя с id: %s не существует", id)));
+        validateExistEmail(userDto.getEmail());
 
-        User updatedUser = get(user.getId());
-        if (user.getName() != null) {
-            updatedUser.setName(user.getName());
+        if (userDto.getName() != null && !userDto.getName().isBlank()) {
+            existingUser.setName(userDto.getName());
         }
 
-        if (user.getEmail() != null) {
-            updatedUser.setEmail(user.getEmail());
+        if (userDto.getEmail() != null && !userDto.getEmail().isBlank()) {
+            existingUser.setEmail(userDto.getEmail());
         }
 
-        return userStorage.update(updatedUser);
+        User updatedUser = userStorage.update(existingUser);
+        return UserMapper.toUserDto(updatedUser);
     }
 
     @Override
@@ -60,15 +70,9 @@ public class UserServiceImpl implements UserService {
         return ++id;
     }
 
-    private void validate(User user) {
-        if (user.getEmail() == null) {
-            throw new ValidationException("Поле емайл не может быть пустым");
-        }
-    }
-
     private void validateExistEmail(String email) {
         if (getAll().stream().anyMatch(user -> user.getEmail().equals(email))) {
-            throw new ValidationException(String.format("Пользователь с email: %s уже существует", email));
+            throw new ConflictException(String.format("Пользователь с email: %s уже существует", email));
         }
     }
 }
