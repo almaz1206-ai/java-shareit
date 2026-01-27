@@ -1,53 +1,58 @@
 package ru.practicum.shareit.user.service;
 
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import ru.practicum.shareit.errors.ConflictException;
 import ru.practicum.shareit.errors.NotFoundException;
-import ru.practicum.shareit.user.dao.UserStorage;
+import ru.practicum.shareit.errors.ValidationException;
 import ru.practicum.shareit.user.dto.UserDto;
 import ru.practicum.shareit.user.mapper.UserMapper;
 import ru.practicum.shareit.user.model.User;
+import ru.practicum.shareit.user.repository.UserRepository;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
-    private final UserStorage userStorage;
-    private long id = 0;
+    private final UserRepository userRepository;
 
     @Override
+    @Transactional
     public UserDto create(UserDto userDto) {
-        validateExistEmail(userDto.getEmail());
+        validateExistEmail(userDto.getEmail(), userDto.getId());
         User user = UserMapper.toUser(userDto);
-
-        user.setId(generatedId());
-
-        User savedUser = userStorage.create(user);
+        User savedUser = userRepository.save(user);
         return UserMapper.toUserDto(savedUser);
+
     }
 
     @Override
-    public UserDto get(Long id) {
-        User user = userStorage.get(id).orElseThrow(() ->
-                new NotFoundException(String.format("Пользователя с id: %s не существует", id)));
+    @Transactional(readOnly = true)
+    public UserDto getById(Long userId) {
+        if (userId == null) throw new ValidationException("Id пользователя не может быть null");
+
+        User user = findUserById(userId);
         return UserMapper.toUserDto(user);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<UserDto> getAll() {
-        return userStorage.getAll().stream()
+        return userRepository.findAll().stream()
                 .map(UserMapper::toUserDto)
                 .collect(Collectors.toList());
     }
 
     @Override
+    @Transactional
     public UserDto update(UserDto userDto, Long userId) {
-        User existingUser = userStorage.get(userId).orElseThrow(() ->
-                new NotFoundException(String.format("Пользователя с id: %s не существует", id)));
-        validateExistEmail(userDto.getEmail());
+        User existingUser = findUserById(userId);
+
+        validateExistEmail(userDto.getEmail(), userId);
 
         if (userDto.getName() != null && !userDto.getName().isBlank()) {
             existingUser.setName(userDto.getName());
@@ -57,21 +62,26 @@ public class UserServiceImpl implements UserService {
             existingUser.setEmail(userDto.getEmail());
         }
 
-        User updatedUser = userStorage.update(existingUser);
-        return UserMapper.toUserDto(updatedUser);
+        return UserMapper.toUserDto(userRepository.save(existingUser));
     }
 
     @Override
+    @Transactional
     public void delete(Long id) {
-        userStorage.delete(id);
+        if (id == null) throw new ValidationException("Id пользователя не может быть null");
+        if (!userRepository.existsById(id)) {
+            throw new NotFoundException(String.format("Пользователя с id: %s не существует", id));
+        }
+        userRepository.deleteById(id);
     }
 
-    private long generatedId() {
-        return ++id;
+    private User findUserById(Long userId) {
+        return userRepository.findById(userId).orElseThrow(() ->
+                new NotFoundException(String.format("Пользователя с id: %s не существует", userId)));
     }
 
-    private void validateExistEmail(String email) {
-        if (getAll().stream().anyMatch(user -> user.getEmail().equals(email))) {
+    private void validateExistEmail(String email, Long userId) {
+        if (userRepository.existsByEmailAndIdNot(email, userId)) {
             throw new ConflictException(String.format("Пользователь с email: %s уже существует", email));
         }
     }
