@@ -61,7 +61,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserDto update(UserDto userDto, Long userId) {
         User existingUser = findUserById(userId);
-
+        log.info("Обновляем пользователя с id={}, предыдущее имя={} на {}", userId, existingUser.getName(), userDto.getName());
         validateExistEmail(userDto.getEmail(), userId);
 
         if (userDto.getName() != null && !userDto.getName().isBlank()) {
@@ -91,6 +91,8 @@ public class UserServiceImpl implements UserService {
     }
 
     private void validateExistEmail(String email, Long userId) {
+        log.info("Проверка email {} на уникальность", email);
+        log.info("Емайл совпадают {}", userRepository.existsByEmailAndIdNot(email, userId));
         if (userRepository.existsByEmailAndIdNot(email, userId)) {
             throw new ConflictException(String.format("Пользователь с email: %s уже существует", email));
         }

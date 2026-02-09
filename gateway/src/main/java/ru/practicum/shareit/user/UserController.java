@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ru.practicum.shareit.user.dto.UserDto;
+import ru.practicum.shareit.user.dto.UserUpdateDto;
 
 @RestController
 @RequestMapping(path = "/users")
@@ -33,7 +34,7 @@ public class UserController {
     }
 
     @PatchMapping("/{userId}")
-    public ResponseEntity<Object> update(@Valid @RequestBody UserDto userDto,
+    public ResponseEntity<Object> update(@Valid @RequestBody UserUpdateDto userDto,
                                          @PathVariable Long userId) {
         return userClient.updateUser(userId, userDto);
     }
